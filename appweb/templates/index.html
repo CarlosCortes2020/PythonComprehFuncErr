@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"> <!-- Define la codificación de caracteres como UTF-8 para soportar caracteres especiales -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Hace que la página sea responsive ajustándose al ancho del dispositivo -->
+    <title>Visualizador de Datos Aleatorios</title> <!-- Título de la página que aparece en la pestaña del navegador -->
+    
+    <!-- Importa la biblioteca Chart.js desde un CDN para crear gráficos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <!-- Estilos CSS para la página -->
+    <style>
+        body {
+            font-family: Arial, sans-serif; /* Define la fuente principal de la página */
+            margin: 20px; /* Margen alrededor del contenido */
+            text-align: center; /* Centra el texto en la página */
+        }
+        .container {
+            max-width: 800px; /* Define un ancho máximo para el contenedor */
+            margin: 0 auto; /* Centra el contenedor horizontalmente */
+        }
+        #value-display {
+            font-size: 2em; /* Tamaño grande para el texto del valor */
+            margin: 20px 0; /* Margen superior e inferior */
+            font-weight: bold; /* Texto en negrita */
+        }
+        .chart-container {
+            height: 400px; /* Altura del contenedor del gráfico */
+            margin-top: 30px; /* Margen superior */
+        }
+        button {
+            padding: 10px 20px; /* Espaciado interno del botón */
+            background-color: #4CAF50; /* Color de fondo verde */
+            color: white; /* Color del texto blanco */
+            border: none; /* Sin bordes */
+            border-radius: 4px; /* Bordes redondeados */
+            cursor: pointer; /* Cambia el cursor a una mano al pasar sobre el botón */
+            font-size: 16px; /* Tamaño de fuente del texto del botón */
+            margin: 10px; /* Margen alrededor del botón */
+        }
+        button:hover {
+            background-color: #45a049; /* Cambia el color de fondo al pasar el cursor sobre el botón */
+        }
+    </style>
+</head>
+<body>
+    <div class="container"> <!-- Contenedor principal de la página -->
+        <h1>Visualizador de Datos Aleatorios</h1> <!-- Título principal de la página -->
+        
+        <div>
+            <!-- Botón para iniciar la obtención de datos -->
+            <button id="start-btn">Iniciar</button>
+            <!-- Botón para detener la obtención de datos -->
+            <button id="stop-btn">Detener</button>
+        </div>
+        
+        <!-- Elemento para mostrar el valor actual obtenido -->
+        <div id="value-display">Esperando datos...</div>
+        
+        <!-- Contenedor del gráfico -->
+        <div class="chart-container">
+            <!-- Lienzo donde se dibujará el gráfico -->
+            <canvas id="dataChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Configuración inicial del gráfico
+        const ctx = document.getElementById('dataChart').getContext('2d'); // Obtiene el contexto 2D del lienzo para dibujar el gráfico
+        const maxDataPoints = 20; // Número máximo de puntos de datos que se mostrarán en el gráfico
+        const initialData = {
+            labels: [], // Etiquetas del eje X (inicialmente vacío)
+            datasets: [{
+                label: 'Valor Aleatorio', // Etiqueta del conjunto de datos
+                data: [], // Datos del gráfico (inicialmente vacío)
+                borderColor: 'rgb(75, 192, 192)', // Color de la línea del gráfico
+                tension: 0.1, // Suavidad de la línea
+                fill: false // No rellena el área bajo la línea
+            }]
+        };
+        
+        // Configuración del gráfico
+        const config = {
+            type: 'line', // Tipo de gráfico: línea
+            data: initialData, // Datos iniciales del gráfico
+            options: {
+                responsive: true, // Hace que el gráfico sea responsive
+                maintainAspectRatio: false, // No mantiene la relación de aspecto predeterminada
+                scales: {
+                    y: {
+                        beginAtZero: true, // El eje Y comienza en 0
+                        max: 100 // Valor máximo del eje Y
+                    }
+                },
+                animation: {
+                    duration: 0 // Desactiva la animación para actualizaciones rápidas
+                }
+            }
+        };
+        
+        // Crea una instancia del gráfico con la configuración definida
+        const myChart = new Chart(ctx, config);
+        
+        // Variables para controlar la actualización de datos
+        let intervalId = null; // Identificador del intervalo para detenerlo más tarde
+        const valueDisplay = document.getElementById('value-display'); // Elemento donde se muestra el valor actual
+        const startBtn = document.getElementById('start-btn'); // Botón de inicio
+        const stopBtn = document.getElementById('stop-btn'); // Botón de detener
+        
+        // Función para obtener nuevos datos del servidor
+        function fetchData() {
+            fetch('/get_random_data') // Realiza una solicitud GET a la ruta '/get_random_data'
+                .then(response => response.json()) // Convierte la respuesta a formato JSON
+                .then(data => {
+                    // Actualiza el valor mostrado en la página
+                    valueDisplay.textContent = `Valor actual: ${data.value}`;
+                    
+                    // Añade el nuevo punto al gráfico
+                    const time = new Date().toLocaleTimeString(); // Obtiene la hora actual como etiqueta
+                    
+                    // Mantiene solo los últimos maxDataPoints puntos en el gráfico
+                    if (myChart.data.labels.length > maxDataPoints) {
+                        myChart.data.labels.shift(); // Elimina la etiqueta más antigua
+                        myChart.data.datasets[0].data.shift(); // Elimina el dato más antiguo
+                    }
+                    
+                    myChart.data.labels.push(time); // Añade la nueva etiqueta (hora actual)
+                    myChart.data.datasets[0].data.push(data.value); // Añade el nuevo valor
+                    myChart.update(); // Actualiza el gráfico para reflejar los cambios
+                })
+                .catch(error => {
+                    // Maneja errores en la solicitud
+                    console.error('Error al obtener datos:', error); // Muestra el error en la consola
+                    valueDisplay.textContent = 'Error al obtener datos'; // Muestra un mensaje de error en la página
+                });
+        }
+        
+        // Eventos de los botones
+        startBtn.addEventListener('click', () => {
+            if (!intervalId) { // Verifica que no haya un intervalo activo
+                // Inicia la obtención de datos cada segundo
+                intervalId = setInterval(fetchData, 1000);
+                startBtn.disabled = true; // Desactiva el botón de inicio
+                stopBtn.disabled = false; // Activa el botón de detener
+            }
+        });
+        
+        stopBtn.addEventListener('click', () => {
+            if (intervalId) { // Verifica que haya un intervalo activo
+                // Detiene la obtención de datos
+                clearInterval(intervalId);
+                intervalId = null; // Resetea el identificador del intervalo
+                startBtn.disabled = false; // Activa el botón de inicio
+                stopBtn.disabled = true; // Desactiva el botón de detener
+            }
+        });
+        
+        // Inicialmente, el botón de detener está deshabilitado
+        stopBtn.disabled = true;
+    </script>
+</body>
+</html>
